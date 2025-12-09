@@ -55,16 +55,25 @@ def get_live_price(ticker):
 def get_historical_price(ticker, date):
     """Fetch historical price for a ticker on a specific date"""
     try:
+        # Convert date to datetime if needed
+        if isinstance(date, datetime):
+            date_obj = date.date()
+        else:
+            date_obj = date
+
+        # Convert to datetime for arithmetic
+        dt = datetime.combine(date_obj, datetime.min.time())
+
         # Add buffer days to ensure we get data
-        start_date = (date - timedelta(days=7)).strftime('%Y-%m-%d')
-        end_date = (date + timedelta(days=1)).strftime('%Y-%m-%d')
+        start_date = (dt - timedelta(days=7)).strftime('%Y-%m-%d')
+        end_date = (dt + timedelta(days=1)).strftime('%Y-%m-%d')
 
         stock = yf.Ticker(ticker)
         data = stock.history(start=start_date, end=end_date)
 
         if not data.empty:
             # Get the closest date
-            closest_date = min(data.index, key=lambda x: abs(x.date() - date))
+            closest_date = min(data.index, key=lambda x: abs(x.date() - date_obj))
             return data.loc[closest_date, 'Close']
         return None
     except Exception as e:

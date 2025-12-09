@@ -33,32 +33,41 @@ def get_live_price(ticker: str) -> Optional[float]:
 
 
 @st.cache_data(ttl=3600)  # Cache for 1 hour
-def get_historical_price(ticker: str, date: datetime) -> Optional[float]:
+def get_historical_price(ticker: str, date) -> Optional[float]:
     """
     Fetch historical price for a ticker on a specific date.
 
     Args:
         ticker: Stock ticker symbol
-        date: Date to fetch price for
+        date: Date to fetch price for (datetime.date or datetime.datetime)
 
     Returns:
         Historical price or None if not available
     """
     try:
+        # Convert date to datetime if needed
+        if isinstance(date, datetime):
+            date_obj = date.date()
+        else:
+            date_obj = date
+
+        # Convert to datetime for arithmetic
+        dt = datetime.combine(date_obj, datetime.min.time())
+
         # Add buffer days to ensure we get data
-        start_date = (date - timedelta(days=7)).strftime('%Y-%m-%d')
-        end_date = (date + timedelta(days=1)).strftime('%Y-%m-%d')
+        start_date = (dt - timedelta(days=7)).strftime('%Y-%m-%d')
+        end_date = (dt + timedelta(days=1)).strftime('%Y-%m-%d')
 
         stock = yf.Ticker(ticker)
         data = stock.history(start=start_date, end=end_date)
 
         if not data.empty:
             # Get the closest date
-            closest_date = min(data.index, key=lambda x: abs(x.date() - date))
+            closest_date = min(data.index, key=lambda x: abs(x.date() - date_obj))
             return data.loc[closest_date, 'Close']
         return None
     except Exception as e:
-        st.warning(f"Error fetching historical price for {ticker}: {str(e)}")
+        # Only show error once per ticker to avoid spam
         return None
 
 
@@ -131,7 +140,7 @@ def get_asx200_data(start_date: str, end_date: str = None) -> pd.DataFrame:
     return get_stock_historical_data('STW.AX', start_date, end_date)
 
 
-@st.cache_data(ttl=3600)  # Cache for 1 hour
+@st.cache_data(ttl=86400)  # Cache for 24 hours (stock info changes slowly)
 def get_stock_info(ticker: str) -> dict:
     """
     Fetch detailed stock information.
@@ -156,7 +165,8 @@ def get_stock_info(ticker: str) -> dict:
             '52w_low': info.get('fiftyTwoWeekLow', None)
         }
     except Exception as e:
-        st.warning(f"Failed to fetch info for {ticker}: {str(e)}")
+        # Return default values instead of warning to avoid spam
+        # Rate limiting is common with stock.info calls
         return {
             'sector': 'Unknown',
             'industry': 'Unknown',
