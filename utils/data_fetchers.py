@@ -327,6 +327,33 @@ def calculate_portfolio_history(transactions: list, end_date: datetime = None) -
     return history_df
 
 
+@st.cache_data(ttl=3600)  # Cache for 1 hour
+def get_benchmark_data(benchmark_name: str, start_date: str, end_date: str = None) -> pd.DataFrame:
+    """
+    Fetch benchmark data for comparison.
+
+    Args:
+        benchmark_name: Name of benchmark ('S&P 500', 'NASDAQ', 'ASX 200', or custom ticker)
+        start_date: Start date in YYYY-MM-DD format
+        end_date: End date in YYYY-MM-DD format (defaults to today)
+
+    Returns:
+        DataFrame with benchmark historical data
+    """
+    # Map common benchmark names to tickers
+    benchmark_tickers = {
+        'S&P 500': '^GSPC',
+        'NASDAQ': '^IXIC',
+        'ASX 200': '^AXJO',
+        'ASX 200 ETF': 'STW.AX',
+        'VTS': 'VTS.AX',
+        'VGS': 'VGS.AX'
+    }
+
+    ticker = benchmark_tickers.get(benchmark_name, benchmark_name)
+    return get_stock_historical_data(ticker, start_date, end_date)
+
+
 @st.cache_data(ttl=300)  # Cache for 5 minutes
 def get_correlation_matrix(tickers: list, start_date: str, end_date: str = None) -> pd.DataFrame:
     """

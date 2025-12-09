@@ -16,6 +16,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.data_fetchers import (
     get_live_price,
     get_asx200_data,
+    get_benchmark_data,
     calculate_portfolio_history
 )
 from utils.calculations import (
@@ -30,6 +31,7 @@ from utils.calculations import (
 )
 from utils.visualizations import (
     create_benchmark_comparison_chart,
+    create_multi_benchmark_comparison,
     create_returns_distribution
 )
 
@@ -282,8 +284,111 @@ def show():
 
             st.markdown("---")
 
-            # ASX 200 Benchmark Comparison
-            st.markdown("#### Benchmark Comparison (ASX 200)")
+            # Multi-Benchmark Comparison
+            st.markdown("#### Portfolio vs Multiple Benchmarks")
+            st.markdown("Compare your portfolio performance against major market indices.")
+
+            # Benchmark selection UI
+            col1, col2, col3 = st.columns([3, 2, 1])
+
+            with col1:
+                available_benchmarks = [
+                    'ASX 200',
+                    'S&P 500',
+                    'NASDAQ',
+                    'ASX 200 ETF',
+                    'VTS',
+                    'VGS'
+                ]
+
+                selected_benchmarks = st.multiselect(
+                    "Select benchmarks to compare",
+                    options=available_benchmarks,
+                    default=['ASX 200'],
+                    help="Choose one or more benchmarks to overlay on your portfolio chart"
+                )
+
+            with col2:
+                custom_ticker = st.text_input(
+                    "Custom Ticker (optional)",
+                    placeholder="e.g., AAPL, TSLA",
+                    help="Add any custom ticker for comparison"
+                )
+
+            with col3:
+                normalize_chart = st.checkbox(
+                    "Normalize to 100",
+                    value=True,
+                    help="Start all series at 100 for fair comparison"
+                )
+
+            # Add custom ticker to selection if provided
+            if custom_ticker:
+                selected_benchmarks.append(custom_ticker.upper())
+
+            if selected_benchmarks:
+                with st.spinner("Fetching benchmark data..."):
+                    try:
+                        start_date = history['date'].min().strftime('%Y-%m-%d')
+                        benchmark_data_dict = {}
+
+                        # Fetch all selected benchmarks
+                        for benchmark_name in selected_benchmarks:
+                            bench_data = get_benchmark_data(benchmark_name, start_date)
+                            if not bench_data.empty:
+                                benchmark_data_dict[benchmark_name] = bench_data
+                            else:
+                                st.warning(f"Could not fetch data for {benchmark_name}")
+
+                        if benchmark_data_dict:
+                            # Create multi-benchmark comparison chart
+                            fig = create_multi_benchmark_comparison(
+                                history,
+                                benchmark_data_dict,
+                                normalize=normalize_chart
+                            )
+                            st.plotly_chart(fig, use_container_width=True)
+
+                            # Calculate and display comparison metrics
+                            st.markdown("**Performance Comparison Summary**")
+
+                            metrics_cols = st.columns(len(benchmark_data_dict) + 1)
+
+                            # Portfolio metrics
+                            with metrics_cols[0]:
+                                if normalize_chart:
+                                    portfolio_return = ((history['value'].iloc[-1] / history['value'].iloc[0]) - 1) * 100
+                                else:
+                                    portfolio_return = total_return_pct
+                                st.metric(
+                                    "Your Portfolio",
+                                    f"{portfolio_return:+.2f}%"
+                                )
+
+                            # Benchmark metrics
+                            for idx, (bench_name, bench_data) in enumerate(benchmark_data_dict.items(), 1):
+                                if idx < len(metrics_cols):
+                                    with metrics_cols[idx]:
+                                        bench_return = ((bench_data['Close'].iloc[-1] / bench_data['Close'].iloc[0]) - 1) * 100
+                                        outperformance = portfolio_return - bench_return
+
+                                        st.metric(
+                                            bench_name,
+                                            f"{bench_return:+.2f}%",
+                                            delta=f"{outperformance:+.2f}% vs you",
+                                            delta_color="inverse"
+                                        )
+
+                        else:
+                            st.warning("No benchmark data available for comparison.")
+
+                    except Exception as e:
+                        st.error(f"Error fetching benchmark data: {str(e)}")
+
+            st.markdown("---")
+
+            # ASX 200 Benchmark Comparison (Original - kept for detailed metrics)
+            st.markdown("#### Detailed ASX 200 Analysis")
 
             with st.spinner("Fetching ASX 200 data..."):
                 try:

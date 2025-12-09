@@ -523,6 +523,133 @@ def create_allocation_pie(holdings_df: pd.DataFrame, group_by: str = 'asset_name
     return fig
 
 
+def create_multi_benchmark_comparison(portfolio_history: pd.DataFrame,
+                                      benchmark_data: dict,
+                                      normalize: bool = True) -> go.Figure:
+    """
+    Create comparison chart with multiple benchmarks overlaid.
+
+    Args:
+        portfolio_history: DataFrame with date and value columns
+        benchmark_data: Dictionary mapping benchmark names to DataFrames with Close column
+        normalize: If True, normalize all series to 100 at start
+
+    Returns:
+        Plotly Figure object
+    """
+    fig = go.Figure()
+
+    # Prepare portfolio data
+    portfolio_df = portfolio_history.copy()
+    portfolio_df = portfolio_df.sort_values('date')
+
+    if normalize:
+        portfolio_df['normalized'] = (portfolio_df['value'] / portfolio_df['value'].iloc[0]) * 100
+        y_col = 'normalized'
+        y_title = 'Indexed Value (Start = 100)'
+        y_format = '.1f'
+    else:
+        y_col = 'value'
+        y_title = 'Value (AUD)'
+        y_format = ',.0f'
+
+    # Plot portfolio (primary line - thicker and more prominent)
+    fig.add_trace(go.Scatter(
+        x=portfolio_df['date'],
+        y=portfolio_df[y_col],
+        mode='lines',
+        name='Your Portfolio',
+        line=dict(color='#2E86AB', width=3),
+        hovertemplate='<b>Portfolio</b><br>' +
+                      'Date: %{x|%Y-%m-%d}<br>' +
+                      'Value: %{y:.2f}<br>' +
+                      '<extra></extra>'
+    ))
+
+    # Define colors for benchmarks
+    benchmark_colors = {
+        'ASX 200': '#F18F01',
+        'S&P 500': '#06D6A0',
+        'NASDAQ': '#EF476F',
+        'VTS': '#FFD166',
+        'VGS': '#9D4EDD'
+    }
+
+    color_idx = 0
+    default_colors = ['#F18F01', '#06D6A0', '#EF476F', '#FFD166', '#9D4EDD', '#00B4D8']
+
+    # Plot benchmarks
+    for benchmark_name, benchmark_df in benchmark_data.items():
+        if benchmark_df.empty or 'Close' not in benchmark_df.columns:
+            continue
+
+        bench_data = benchmark_df.copy()
+
+        if normalize:
+            bench_data['normalized'] = (bench_data['Close'] / bench_data['Close'].iloc[0]) * 100
+            y_values = bench_data['normalized']
+        else:
+            y_values = bench_data['Close']
+
+        # Get color for this benchmark
+        color = benchmark_colors.get(benchmark_name, default_colors[color_idx % len(default_colors)])
+        color_idx += 1
+
+        fig.add_trace(go.Scatter(
+            x=bench_data.index,
+            y=y_values,
+            mode='lines',
+            name=benchmark_name,
+            line=dict(color=color, width=2, dash='dash'),
+            hovertemplate=f'<b>{benchmark_name}</b><br>' +
+                          'Date: %{x|%Y-%m-%d}<br>' +
+                          'Value: %{y:.2f}<br>' +
+                          '<extra></extra>'
+        ))
+
+    # Update layout
+    title_text = 'Portfolio Performance vs Benchmarks'
+    if normalize:
+        title_text += ' (Normalized to 100)'
+
+    fig.update_layout(
+        title=title_text,
+        xaxis_title='Date',
+        yaxis_title=y_title,
+        hovermode='x unified',
+        template='plotly_white',
+        height=600,
+        xaxis=dict(
+            rangeselector=dict(
+                buttons=list([
+                    dict(count=1, label="1M", step="month", stepmode="backward"),
+                    dict(count=3, label="3M", step="month", stepmode="backward"),
+                    dict(count=6, label="6M", step="month", stepmode="backward"),
+                    dict(count=1, label="YTD", step="year", stepmode="todate"),
+                    dict(count=1, label="1Y", step="year", stepmode="backward"),
+                    dict(step="all", label="ALL")
+                ]),
+                bgcolor='#E8E8E8',
+                activecolor='#2E86AB'
+            ),
+            rangeslider=dict(visible=False),
+            type='date'
+        ),
+        yaxis=dict(
+            tickformat=y_format
+        ),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        )
+    )
+
+    return fig
+
+
 def create_returns_distribution(returns_series: pd.Series) -> go.Figure:
     """
     Create histogram showing distribution of returns.

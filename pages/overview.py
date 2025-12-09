@@ -12,13 +12,14 @@ import os
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.data_fetchers import get_live_price, get_market_indicators, calculate_portfolio_history
+from utils.data_fetchers import get_live_price, get_market_indicators, calculate_portfolio_history, get_benchmark_data
 from utils.calculations import calculate_time_weighted_return, calculate_simple_return, calculate_ytd_return
 from utils.visualizations import (
     create_portfolio_value_chart,
     create_treemap,
     create_sunburst_chart,
-    create_allocation_pie
+    create_allocation_pie,
+    create_multi_benchmark_comparison
 )
 
 
@@ -276,6 +277,74 @@ def show():
                 st.info("Not enough data to display portfolio timeline. Add more transactions!")
         except Exception as e:
             st.error(f"Error loading portfolio history: {str(e)}")
+
+    st.markdown("---")
+
+    # Quick Benchmark Comparison
+    st.markdown("#### Quick Benchmark Comparison")
+
+    with st.expander("Compare with Market Benchmarks", expanded=False):
+        st.markdown("Quickly compare your portfolio performance against major indices.")
+
+        col1, col2 = st.columns([3, 1])
+
+        with col1:
+            quick_benchmarks = st.multiselect(
+                "Select benchmarks",
+                options=['ASX 200', 'S&P 500', 'NASDAQ', 'VTS', 'VGS'],
+                default=['ASX 200'],
+                key="overview_benchmarks"
+            )
+
+        with col2:
+            quick_normalize = st.checkbox("Normalize", value=True, key="overview_normalize")
+
+        if quick_benchmarks:
+            try:
+                history = calculate_portfolio_history(st.session_state.portfolio)
+
+                if not history.empty:
+                    start_date = history['date'].min().strftime('%Y-%m-%d')
+                    benchmark_data_dict = {}
+
+                    with st.spinner("Fetching benchmark data..."):
+                        for benchmark_name in quick_benchmarks:
+                            bench_data = get_benchmark_data(benchmark_name, start_date)
+                            if not bench_data.empty:
+                                benchmark_data_dict[benchmark_name] = bench_data
+
+                    if benchmark_data_dict:
+                        fig = create_multi_benchmark_comparison(
+                            history,
+                            benchmark_data_dict,
+                            normalize=quick_normalize
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+
+                        # Quick performance summary
+                        st.markdown("**Performance Summary**")
+                        perf_cols = st.columns(len(benchmark_data_dict) + 1)
+
+                        portfolio_return = ((history['value'].iloc[-1] / history['value'].iloc[0]) - 1) * 100
+
+                        with perf_cols[0]:
+                            st.metric("Your Portfolio", f"{portfolio_return:+.2f}%")
+
+                        for idx, (bench_name, bench_data) in enumerate(benchmark_data_dict.items(), 1):
+                            if idx < len(perf_cols):
+                                with perf_cols[idx]:
+                                    bench_return = ((bench_data['Close'].iloc[-1] / bench_data['Close'].iloc[0]) - 1) * 100
+                                    diff = portfolio_return - bench_return
+                                    st.metric(
+                                        bench_name,
+                                        f"{bench_return:+.2f}%",
+                                        delta=f"{diff:+.2f}% diff",
+                                        delta_color="normal" if diff >= 0 else "inverse"
+                                    )
+
+                        st.info("For detailed performance analysis, visit the Performance page.")
+            except Exception as e:
+                st.error(f"Error loading benchmark comparison: {str(e)}")
 
     st.markdown("---")
 

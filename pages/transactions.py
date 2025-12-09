@@ -183,7 +183,7 @@ def show():
             template='plotly_white'
         )
 
-        fig.update_yaxis(tickprefix='A$', tickformat=',.0f')
+        fig.update_yaxes(tickprefix='A$', tickformat=',.0f')
 
         st.plotly_chart(fig, use_container_width=True)
 
@@ -249,7 +249,7 @@ def show():
             template='plotly_white'
         )
 
-        fig.update_yaxis(tickprefix='A$', tickformat=',.0f')
+        fig.update_yaxes(tickprefix='A$', tickformat=',.0f')
 
         st.plotly_chart(fig, use_container_width=True)
 
@@ -268,27 +268,58 @@ def show():
         # Show recent transactions for deletion
         st.markdown("**Recent Transactions:**")
 
-        for original_idx, transaction in transactions_with_index[:10]:  # Show last 10
+        # Header row
+        col1, col2, col3, col4, col5, col6 = st.columns([1.5, 2, 1.5, 1, 2, 1])
+        with col1:
+            st.markdown("**Date**")
+        with col2:
+            st.markdown("**Asset**")
+        with col3:
+            st.markdown("**Type**")
+        with col4:
+            st.markdown("**Qty**")
+        with col5:
+            st.markdown("**Value**")
+        with col6:
+            st.markdown("**Action**")
+
+        st.markdown("---")
+
+        # Initialize delete confirmation state
+        if 'delete_confirm' not in st.session_state:
+            st.session_state.delete_confirm = None
+
+        for original_idx, transaction in transactions_with_index[:20]:  # Show last 20
             col1, col2, col3, col4, col5, col6 = st.columns([1.5, 2, 1.5, 1, 2, 1])
 
             with col1:
                 st.text(transaction['date'])
             with col2:
-                st.text(transaction['asset_name'])
+                st.text(transaction['asset_name'][:20])  # Truncate long names
             with col3:
-                badge = "BUY" if transaction['transaction_type'] == 'Buy' else "SELL"
+                badge = "🟢 BUY" if transaction['transaction_type'] == 'Buy' else "🔴 SELL"
                 st.text(badge)
             with col4:
                 st.text(f"{transaction['quantity']:.2f}")
             with col5:
                 st.text(f"A${transaction['total_value']:,.2f}")
             with col6:
-                if st.button("Delete", key=f"delete_txn_{original_idx}", type="secondary"):
-                    if delete_transaction(original_idx):
-                        st.success("Transaction deleted!")
+                # Check if this transaction is pending confirmation
+                if st.session_state.delete_confirm == original_idx:
+                    if st.button("✓ Confirm", key=f"confirm_txn_{original_idx}", type="primary"):
+                        if delete_transaction(original_idx):
+                            st.session_state.delete_confirm = None
+                            st.success("Transaction deleted!")
+                            st.rerun()
+                        else:
+                            st.error("Failed to delete")
+                    if st.button("✗ Cancel", key=f"cancel_txn_{original_idx}"):
+                        st.session_state.delete_confirm = None
                         st.rerun()
-                    else:
-                        st.error("Failed to delete")
+                else:
+                    if st.button("🗑️", key=f"delete_txn_{original_idx}", help="Delete this transaction"):
+                        st.session_state.delete_confirm = original_idx
+                        st.rerun()
 
         st.markdown("---")
 
