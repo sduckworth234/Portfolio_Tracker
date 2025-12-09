@@ -91,6 +91,14 @@ def add_transaction(asset_name, asset_type, quantity, price, date, transaction_t
     st.session_state.portfolio.append(transaction)
     save_data()
 
+def delete_transaction(index):
+    """Delete a transaction by index"""
+    if 0 <= index < len(st.session_state.portfolio):
+        st.session_state.portfolio.pop(index)
+        save_data()
+        return True
+    return False
+
 def get_portfolio_summary():
     """Calculate portfolio summary statistics with live prices"""
     if not st.session_state.portfolio:
@@ -325,23 +333,69 @@ with tab3:
     st.header("Transaction History")
 
     if st.session_state.portfolio:
-        df = pd.DataFrame(st.session_state.portfolio)
-        df = df.sort_values('date', ascending=False)
+        st.subheader("All Transactions")
 
-        # Display transaction history
-        display_df = df.copy()
-        display_df['total_value'] = display_df['total_value'].apply(lambda x: f"A${x:,.2f}")
-        display_df['price'] = display_df['price'].apply(lambda x: f"A${x:,.2f}")
-        display_df = display_df[['date', 'asset_name', 'ticker', 'asset_type', 'transaction_type',
-                                'quantity', 'price', 'total_value']]
-        display_df.columns = ['Date', 'Asset', 'Ticker', 'Type', 'Transaction',
-                              'Quantity', 'Price', 'Total Value']
+        # Column headers
+        col1, col2, col3, col4, col5, col6, col7, col8, col9 = st.columns([1.5, 2, 1.5, 1.5, 1.5, 1, 1.5, 1.5, 1])
+        with col1:
+            st.markdown("**Date**")
+        with col2:
+            st.markdown("**Asset**")
+        with col3:
+            st.markdown("**Ticker**")
+        with col4:
+            st.markdown("**Type**")
+        with col5:
+            st.markdown("**Transaction**")
+        with col6:
+            st.markdown("**Qty**")
+        with col7:
+            st.markdown("**Price**")
+        with col8:
+            st.markdown("**Total**")
+        with col9:
+            st.markdown("**Delete**")
 
-        st.dataframe(display_df, use_container_width=True, hide_index=True)
+        st.markdown("---")
+
+        # Create a sorted copy with original indices
+        transactions_with_index = [(i, t) for i, t in enumerate(st.session_state.portfolio)]
+        transactions_with_index.sort(key=lambda x: x[1]['date'], reverse=True)
+
+        # Display transactions with delete buttons
+        for original_idx, transaction in transactions_with_index:
+            col1, col2, col3, col4, col5, col6, col7, col8, col9 = st.columns([1.5, 2, 1.5, 1.5, 1.5, 1, 1.5, 1.5, 1])
+
+            with col1:
+                st.text(transaction['date'])
+            with col2:
+                st.text(transaction['asset_name'])
+            with col3:
+                st.text(transaction.get('ticker', transaction['asset_name']))
+            with col4:
+                st.text(transaction['asset_type'])
+            with col5:
+                badge_color = "🟢" if transaction['transaction_type'] == 'Buy' else "🔴"
+                st.text(f"{badge_color} {transaction['transaction_type']}")
+            with col6:
+                st.text(f"{transaction['quantity']:.4f}")
+            with col7:
+                st.text(f"A${transaction['price']:,.2f}")
+            with col8:
+                st.text(f"A${transaction['total_value']:,.2f}")
+            with col9:
+                if st.button("🗑️", key=f"delete_{original_idx}", help="Delete transaction"):
+                    if delete_transaction(original_idx):
+                        st.success("Transaction deleted!")
+                        st.rerun()
+                    else:
+                        st.error("Failed to delete transaction")
+
+        st.markdown("---")
 
         # Transaction timeline
         st.subheader("Transaction Timeline")
-        df_timeline = df.copy()
+        df_timeline = pd.DataFrame(st.session_state.portfolio)
         df_timeline['date'] = pd.to_datetime(df_timeline['date'])
 
         fig = px.scatter(df_timeline, x='date', y='total_value',
